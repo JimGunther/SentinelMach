@@ -6,8 +6,8 @@ import os
 # theDB.py: support Python file for Sentinel project. Handles the Functionality of data transfer using SQL between the code and
 # the Sentinel database
 #
-# Version 1.4
-# Last updated 20/07/2025 16:05
+# Version 1.5
+# Last updated 30/07/2025 15:58
 #
 # Author: Jim Gunther
 #*********************************************************************************************************************************
@@ -88,6 +88,20 @@ class theDB:
         '''
         sql = "SELECT ID, FobUID, GivenName FROM Shedders WHERE EndDate IS NULL AND FobUID = '" + fobUIDString + "'"
         return cls.fetchOne(sql)
+        
+    # 1A. Get fobuid from membership number
+    @classmethod
+    def fobFromNo(cls, memNo: int) -> str:
+        '''fobFromNo(): gets a shedder's fobUID from their membership ID
+        parameter: memNo: int: shedder's unique membership number
+        returns: str: the matching fob UID string
+        '''
+        sql = "SELECT FobUID FROM Shedders WHERE ID = " + str(memNo)
+        result = cls.fetchOne(sql)
+        if result is None:
+            return "none"
+        else:
+            return result[0] # result is a tuple with one member
 
     # 2. Is person in or out of shed?
     @classmethod

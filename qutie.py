@@ -7,7 +7,7 @@ from theDB import theDB
 # qutie.py: support Python file for Sentinel project. Handles MQTT functionality, using the paho.mqtt.client library
 #
 # Version 1.2
-# Last updated 23/07/20265 09:03
+# Last updated 30/07/2026 15:34
 # 
 # Author: Jim Gunther
 #*********************************************************************************************************************************
@@ -27,7 +27,8 @@ def on_connect(client, userdata, flags, rc):
     returns: none: it's an ISR!
     '''
     for s in sents:
-        client.subscribe("MiS/" + s + "/IN")
+        client.subscribe("MiS/" + s + "/IN")    # fobbing in/out
+        client.subscribe("MiS/MACH/" + s + "/IN") # machine authorisation
 
 def on_icMessage(client, userdata, msg):
     '''on_icMessage(): places incoming MQTT message in icBuffer and sets config.touchReceived flag
@@ -36,11 +37,13 @@ def on_icMessage(client, userdata, msg):
         msg: string, payload text of incoming message
     returns: none
     '''
-    if (msg.topic[0:9] == "MiS/RFID_") or (msg.topic[0:8] == "MiS/MACH"):
+    if (msg.topic[0:9] == "MiS/RFID_") or (msg.topic[0:14] == "MiS/MACH/RFID_"):
         config.mach = True
-        if msg.topic[0:9] == MiS/RFID":
+        if msg.topic[0:9] == "MiS/RFID":
             config.sender = msg.topic[4:10] # works only for single digit after RFID_
             config.mach = False
+        else:
+            config.sender = msg.topic[0:16]   ## NB i/c topic without "IN" is stored as "sender" for machine touches
         config.icBuffer = msg.payload.decode("utf-8")
         config.touchReceived = True
         #handle fob touches, otherwise ignore

@@ -4,6 +4,7 @@ import os
 import time
 import sys
 import subprocess
+import string
 import config
 from theDB import theDB
 from qutie import Qutie
@@ -13,7 +14,7 @@ from qutie import Qutie
 # Sentinel database, running on the same RPi on the MariaDB database server: now with added support for machines!
 #
 # Version 0.2
-# Last updated 28/07/2026 09:16
+# Last updated 31/07/2026 09:59
 # Author: Jim Gunther
 #*********************************************************************************************************************************
 
@@ -42,11 +43,14 @@ def handleIncomingTouch() -> None:
     sender = config.sender
     if config.mach:
         fobuid = icMess[0:8]    ## ASSUMES UID IS 8 CHARACTERS LONG
-        machNo = int(icMess[9:])    ## ASSUMES UID IS 8 CHARACTERS LONG FOLLOWED BY 'M' and number
+        machNo = int(icMess[10:])    ## ASSUMES UID IS 8 CHARACTERS LONG FOLLOWED BY ',M' and number
         matched = matchBoth(fobuid, machNo)
-        yn = matched ? ':Y' : ':N'
-        reply = icMess + yn
-        qt.postStuff(sender + "/OUT", reply)
+        if matched:
+            yn = ',Y'
+        else:
+            yn = ',N'
+        reply = fobuid + yn
+        qt.postStuff(sender + "OUT", reply) # for machine authorisation "sender" is actually i/c topic minus "IN" at the end
         return
     else:
         fobUID = icMess # only item in payload from Sentry
@@ -145,7 +149,6 @@ def dailyReport() -> None:
         print(df[1] + " " + df[0], file=f)
     print("\n\n", file=f)
     print("Report created " + datetime.now().strftime("%A, %d %B %Y %H:%M"), file=f)
-    f.close()
 
 def monthlyReport() -> None:
     '''monthlyReport(): creates a report as CSV file of daily attenders in calendar format
@@ -263,31 +266,6 @@ def checkMonthly() -> None:
             monthlyVisitors()
     prevDay = dt
 # =================================================================================================================
-
-def readNumbers() -> bool:
-    '''readNumbers(): reads CSV lookup table matching machine names and numbers
-    parameters: nonereturns: bool TRue if read successfully, otherwise False
-    '''
-    global machNos
-    fNos = open('MacNos.csv', 'rt')
-    comma = ','
-    mn = {}
-    try:
-        while True:
-            line = fNos.readline()
-            if not line:
-                break
-            ix = line.find(comma)
-            mnm = line[0:ix]
-            mno = line[ix + 1:]           
-            if mno.isdecimal(): # checks mch is a valid decimal number
-                mNo = int(mno)
-            mn[mnm] = mNo
-        fNos.close()
-        machNos = mn.copy() # copy to global variable dictionary
-        return True
-    except:
-        return False
     
 def readPermissions() -> bool:
     '''readPermissions(): provisional method to read the machine permissions file and store the results in an array of tuples (int, str)
@@ -295,10 +273,12 @@ def readPermissions() -> bool:
     parameters: nonereturns: bool: True if successfully read and updated
     '''
     global machPerms
-    dtSaved = os.path.getmtime('Permissions.csv')
+    global dtPerms
+    ts = os.path.getmtime('Permissions.txt') # NB: FILE NAME NOT CONFIRMED
+    dtSaved = datetime.fromtimestamp(ts)
     if dtPerms < dtSaved:
         # read file with machine permissions
-        fPerms = open('Permissions.csv', 'rt')
+        fPerms = open('Permissions.txt', 'rt')
         comma = ','
         mp = []
         try:
@@ -307,19 +287,25 @@ def readPermissions() -> bool:
                 if not line:
                     break
                 ix = line.find(comma)
-                mch = line[0:ix]
+                mch = line[0:ix]            
                 if mch.isdecimal(): # checks mch is a valid decimal number
                     mNo = int(mch)
-                    uid = line[ix + 1:]
-                    if all(c in string.hexdigits for c in uid): # checks uid is a valid hexadecimal string
-                        mp.append((mNo, uid))
+                    shedderID = line[ix + 1:]
+                    ix = shedderID.find(comma)
+                    shedderID = shedderID[0:ix]
+                    if shedderID.isdecimal():
+                        sid = int(shedderID)
+                        uid = theDB.fobFromNo(sid)
+                        if all(c in string.hexdigits for c in uid): # checks uid is a valid hexadecimal string
+                            mp.append((mNo, uid))
             fPerms.close()
             machPerms.clear() # empty the permanent (global) list
             for p in mp:
                 machPerms.append(p)
             dtPerms = datetime.now()
-        return True
-        except:
+            return True
+        except Exception as ex:
+            print (ex)
             return False
     else:
            return False
@@ -390,8 +376,7 @@ def matchBoth(uid: str, mNo: int) -> bool:
 # ====================================================================================
 
 def setup():
-    ok = readNumbers()
-    ok &= readPermissions()
+    ok = readPermissions()
     if not ok:
         print ("Setup failed: reading CSV files" )
         return
